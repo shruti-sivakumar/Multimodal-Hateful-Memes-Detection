@@ -1,0 +1,16 @@
+torch
+torchvision
+torchaudio
+transformers
+datasets
+ultralytics
+scikit-learn
+xgboost
+peft
+numpy
+pandas
+tqdm
+matplotlib
+seaborn
+pyyaml
+optuna
