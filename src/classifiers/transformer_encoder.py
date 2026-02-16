@@ -68,7 +68,15 @@ class TransformerEncoderClassifier(nn.Module):
         if self.pool == "cls":
             pooled = x[:, 0]         # CLS
         else:
-            pooled = x.mean(dim=1)   # mean pool
+            # x: [B, L, D]
+            if attn_mask is None:
+                pooled = x.mean(dim=1)
+            else:
+                # attn_mask: [B, L] with 1=valid, 0=pad
+                mask = attn_mask.unsqueeze(-1).float()          # [B, L, 1]
+                x = x * mask
+                denom = mask.sum(dim=1).clamp(min=1.0)          # [B, 1]
+                pooled = x.sum(dim=1) / denom                   # [B, D]
 
         pooled = self.drop(pooled)
         return self.fc(pooled)
