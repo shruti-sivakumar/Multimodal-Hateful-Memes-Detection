@@ -1,25 +1,28 @@
+from __future__ import annotations
+
 import os
 import json
+from dataclasses import dataclass
+from typing import Dict, Optional, Tuple, Union, Any
+
 import numpy as np
 
-from dataclasses import dataclass
-from typing import Dict, Optional, Tuple, Any
-
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
+from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import StratifiedKFold
-
-try:
-    import xgboost as xgb
-    _HAS_XGB = True
-except Exception:
-    _HAS_XGB = False
 
 
-# Threshold tuning + metrics
+def _pos_weight_from_labels(y: np.ndarray) -> float:
+    neg = float((y == 0).sum())
+    pos = float((y == 1).sum())
+    pos = max(pos, 1.0)
+    return neg / pos
+
+
 def tune_threshold(y_true: np.ndarray, probs: np.ndarray, metric: str = "f1") -> Tuple[float, float]:
+    from sklearn.metrics import f1_score, accuracy_score
+
     best_t, best_score = 0.5, -1.0
     for t in np.linspace(0.05, 0.95, 91):
         preds = (probs >= t).astype(int)
@@ -34,258 +37,217 @@ def tune_threshold(y_true: np.ndarray, probs: np.ndarray, metric: str = "f1") ->
     return best_t, best_score
 
 
-def compute_metrics(y_true: np.ndarray, probs: np.ndarray, threshold: float) -> Dict[str, float]:
-    preds = (probs >= threshold).astype(int)
-    auc = roc_auc_score(y_true, probs) if len(np.unique(y_true)) > 1 else float("nan")
-    return {
-        "auc": float(auc),
-        "acc": float(accuracy_score(y_true, preds)),
-        "f1": float(f1_score(y_true, preds)),
-    }
-
-
-def _summarize_folds(rows: list[Dict[str, float]]) -> Dict[str, Any]:
-    # rows contain keys: auc, acc, f1, best_threshold
-    out: Dict[str, Any] = {"folds": rows}
-    for k in ["auc", "acc", "f1", "best_threshold"]:
-        vals = np.array([r[k] for r in rows], dtype=float)
-        out[f"{k}_mean"] = float(np.nanmean(vals))
-        out[f"{k}_std"] = float(np.nanstd(vals))
-    return out
-
-
-# Config
 @dataclass
-class SklearnConfig:
-    threshold_metric: str = "f1"      # "f1" or "acc" (used for dev threshold tuning + CV fold threshold tuning)
-    save_dir: str = "models/sklearn"
-    cv_folds: int = 0                # 0/1 disables CV; >=2 runs Stratified K-Fold on TRAIN only
-    cv_seed: int = 42
+class SklearnTrainConfig:
+    threshold_metric: str = "f1"  # "f1" or "acc"
+
+    # CV (optional)
+    kfold_cv: bool = False
+    n_splits: int = 5
+    random_state: int = 42
 
 
-# Cross-validation helpers (TRAIN ONLY)
-def cross_validate_logreg(
-    X: np.ndarray,
-    y: np.ndarray,
-    cfg: SklearnConfig,
-) -> Dict[str, Any]:
-    skf = StratifiedKFold(n_splits=cfg.cv_folds, shuffle=True, random_state=cfg.cv_seed)
-    fold_rows: list[Dict[str, float]] = []
-
-    for fold, (tr_idx, va_idx) in enumerate(skf.split(X, y), start=1):
-        model = Pipeline([
-            ("scaler", StandardScaler()),
-            ("clf", LogisticRegression(
-                max_iter=2000,
-                class_weight="balanced",
-                n_jobs=-1,
-                solver="lbfgs"
-            ))
-        ])
-
-        model.fit(X[tr_idx], y[tr_idx])
-        p_val = model.predict_proba(X[va_idx])[:, 1]
-
-        thr, _ = tune_threshold(y[va_idx], p_val, metric=cfg.threshold_metric)
-        m = compute_metrics(y[va_idx], p_val, thr)
-        fold_rows.append({
-            "fold": float(fold),
-            "auc": m["auc"],
-            "acc": m["acc"],
-            "f1": m["f1"],
-            "best_threshold": float(thr),
-        })
-
-    return _summarize_folds(fold_rows)
+ReturnDict = Dict[str, Union[str, float]]
 
 
-def cross_validate_xgboost(
-    X: np.ndarray,
-    y: np.ndarray,
-    cfg: SklearnConfig,
-    params: Optional[Dict] = None,
-) -> Dict[str, Any]:
-    if not _HAS_XGB:
-        raise ImportError("xgboost is not installed. pip install xgboost")
+def _ensure_dir(path: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    params = params or {}
-    skf = StratifiedKFold(n_splits=cfg.cv_folds, shuffle=True, random_state=cfg.cv_seed)
-    fold_rows: list[Dict[str, float]] = []
 
-    base_defaults = dict(
-        n_estimators=500,
-        learning_rate=0.05,
-        max_depth=6,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        reg_lambda=1.0,
-        objective="binary:logistic",
-        eval_metric="auc",
-        tree_method="hist",
-        n_jobs=-1,
+# -----------------------------
+# Logistic Regression
+# -----------------------------
+
+
+def train_logreg(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_dev: np.ndarray,
+    y_dev: np.ndarray,
+    save_path: str,
+    cfg: Optional[SklearnTrainConfig] = None,
+) -> ReturnDict:
+    """Train Logistic Regression (CPU) on embeddings.
+
+    - Uses StandardScaler + LogisticRegression(class_weight='balanced').
+    - Optional Stratified K-fold CV on train for reporting.
+    - Fits final model on full train.
+    - Tunes best_threshold on dev.
+    """
+
+    if cfg is None:
+        cfg = SklearnTrainConfig()
+
+    pw = _pos_weight_from_labels(y_train)
+
+    pipe = Pipeline(
+        steps=[
+            ("scaler", StandardScaler(with_mean=True, with_std=True)),
+            (
+                "clf",
+                LogisticRegression(
+                    max_iter=2000,
+                    class_weight="balanced",
+                    solver="lbfgs",
+                    n_jobs=None,
+                ),
+            ),
+        ]
     )
 
-    for fold, (tr_idx, va_idx) in enumerate(skf.split(X, y), start=1):
-        y_tr = y[tr_idx]
-        neg = float((y_tr == 0).sum())
-        pos = float((y_tr == 1).sum())
-        scale_pos_weight = neg / max(pos, 1.0)
+    cv_report: Optional[Dict[str, Any]] = None
+    if cfg.kfold_cv:
+        from sklearn.metrics import roc_auc_score
 
-        fold_params = dict(base_defaults)
-        fold_params.update(params)
-        fold_params["scale_pos_weight"] = scale_pos_weight
+        skf = StratifiedKFold(n_splits=cfg.n_splits, shuffle=True, random_state=cfg.random_state)
+        aucs = []
+        for fold, (tr_idx, va_idx) in enumerate(skf.split(X_train, y_train), start=1):
+            X_tr, y_tr = X_train[tr_idx], y_train[tr_idx]
+            X_va, y_va = X_train[va_idx], y_train[va_idx]
 
-        model = xgb.XGBClassifier(**fold_params)
-        model.fit(X[tr_idx], y_tr)
+            pipe.fit(X_tr, y_tr)
+            va_probs = pipe.predict_proba(X_va)[:, 1]
+            auc = roc_auc_score(y_va, va_probs) if len(np.unique(y_va)) > 1 else float("nan")
+            aucs.append(float(auc))
 
-        p_val = model.predict_proba(X[va_idx])[:, 1]
-        thr, _ = tune_threshold(y[va_idx], p_val, metric=cfg.threshold_metric)
-        m = compute_metrics(y[va_idx], p_val, thr)
+        cv_report = {
+            "n_splits": cfg.n_splits,
+            "random_state": cfg.random_state,
+            "fold_auc": aucs,
+            "mean_auc": float(np.nanmean(aucs)),
+            "std_auc": float(np.nanstd(aucs)),
+        }
 
-        fold_rows.append({
-            "fold": float(fold),
-            "auc": m["auc"],
-            "acc": m["acc"],
-            "f1": m["f1"],
-            "best_threshold": float(thr),
-        })
+    # Fit on full train
+    pipe.fit(X_train, y_train)
 
-    return _summarize_folds(fold_rows)
+    # Tune threshold on dev
+    dev_probs = pipe.predict_proba(X_dev)[:, 1]
+    best_thr, _ = tune_threshold(y_dev.astype(int), dev_probs, metric=cfg.threshold_metric)
 
-
-# Trainers
-def train_logreg(
-    X_train: np.ndarray, y_train: np.ndarray,
-    X_dev: np.ndarray, y_dev: np.ndarray,
-    X_test: np.ndarray, y_test: np.ndarray,
-    cfg: Optional[SklearnConfig] = None,
-    run_name: str = "logreg"
-) -> Dict[str, Any]:
-    """
-    Logistic Regression (CPU) with class_weight='balanced'.
-
-    - Optional: Stratified K-Fold CV on TRAIN only (cfg.cv_folds >= 2)
-      Reports mean±std metrics across folds (threshold tuned inside each fold val).
-    - Final model: fit on full TRAIN, tune threshold on DEV, report TRAIN/DEV/TEST.
-    """
-    cfg = cfg or SklearnConfig()
-
-    out: Dict[str, Any] = {}
-
-    # ---- Optional CV on TRAIN only
-    if cfg.cv_folds and cfg.cv_folds >= 2:
-        out["cv"] = cross_validate_logreg(X_train, y_train, cfg)
-
-    # ---- Final fit on full TRAIN
-    model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("clf", LogisticRegression(
-            max_iter=2000,
-            class_weight="balanced",
-            n_jobs=-1,
-            solver="lbfgs"
-        ))
-    ])
-
-    model.fit(X_train, y_train)
-
-    p_train = model.predict_proba(X_train)[:, 1]
-    p_dev = model.predict_proba(X_dev)[:, 1]
-    p_test = model.predict_proba(X_test)[:, 1]
-
-    # tune threshold on DEV only
-    thr, _ = tune_threshold(y_dev, p_dev, metric=cfg.threshold_metric)
-
-    m_train = compute_metrics(y_train, p_train, thr)
-    m_dev = compute_metrics(y_dev, p_dev, thr)
-    m_test = compute_metrics(y_test, p_test, thr)
-
-    out.update({
-        "best_threshold": float(thr),
-        "train_auc": m_train["auc"], "train_acc": m_train["acc"], "train_f1": m_train["f1"],
-        "dev_auc": m_dev["auc"], "dev_acc": m_dev["acc"], "dev_f1": m_dev["f1"],
-        "test_auc": m_test["auc"], "test_acc": m_test["acc"], "test_f1": m_test["f1"],
-    })
-
-    os.makedirs(cfg.save_dir, exist_ok=True)
+    _ensure_dir(save_path)
     import joblib
-    joblib.dump(model, os.path.join(cfg.save_dir, f"{run_name}.joblib"))
-    with open(os.path.join(cfg.save_dir, f"{run_name}_meta.json"), "w") as f:
-        json.dump(out, f, indent=2)
 
-    return out
+    joblib.dump(
+        {
+            "pipeline": pipe,
+            "best_threshold": float(best_thr),
+            "pos_weight": float(pw),
+            "cv_report": cv_report,
+        },
+        save_path,
+    )
+    print(f"Saved: {save_path}")
+
+    # Optional: also save a sidecar json for quick report viewing
+    if cfg.kfold_cv:
+        sidecar = os.path.splitext(save_path)[0] + "_cv.json"
+        with open(sidecar, "w", encoding="utf-8") as f:
+            json.dump(cv_report, f, indent=2)
+        print(f"Saved CV report: {sidecar}")
+
+    return {"model_path": save_path, "best_threshold": float(best_thr), "pos_weight": float(pw)}
+
+
+# -----------------------------
+# XGBoost
+# -----------------------------
 
 
 def train_xgboost(
-    X_train: np.ndarray, y_train: np.ndarray,
-    X_dev: np.ndarray, y_dev: np.ndarray,
-    X_test: np.ndarray, y_test: np.ndarray,
-    cfg: Optional[SklearnConfig] = None,
-    run_name: str = "xgb",
-    params: Optional[Dict] = None
-) -> Dict[str, Any]:
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_dev: np.ndarray,
+    y_dev: np.ndarray,
+    save_path: str,
+    cfg: Optional[SklearnTrainConfig] = None,
+    xgb_params: Optional[Dict[str, Any]] = None,
+) -> ReturnDict:
+    """Train XGBoost (CPU) on embeddings.
+
+    - Uses scale_pos_weight = neg/pos.
+    - Optional Stratified K-fold CV on train for reporting.
+    - Fits final model on full train.
+    - Tunes best_threshold on dev.
     """
-    XGBoost (CPU).
 
-    - Optional: Stratified K-Fold CV on TRAIN only (cfg.cv_folds >= 2)
-      Reports mean±std metrics across folds (threshold tuned inside each fold val).
-    - Final model: fit on full TRAIN, tune threshold on DEV, report TRAIN/DEV/TEST.
-    """
-    if not _HAS_XGB:
-        raise ImportError("xgboost is not installed. pip install xgboost")
+    if cfg is None:
+        cfg = SklearnTrainConfig()
 
-    cfg = cfg or SklearnConfig()
-    params = params or {}
+    try:
+        import xgboost as xgb
+    except ImportError as e:
+        raise ImportError("xgboost not installed. pip install xgboost") from e
 
-    out: Dict[str, Any] = {}
+    pw = _pos_weight_from_labels(y_train)
 
-    # ---- Optional CV on TRAIN only
-    if cfg.cv_folds and cfg.cv_folds >= 2:
-        out["cv"] = cross_validate_xgboost(X_train, y_train, cfg, params=params)
+    params = {
+        "n_estimators": 600,
+        "learning_rate": 0.05,
+        "max_depth": 6,
+        "subsample": 0.9,
+        "colsample_bytree": 0.9,
+        "reg_lambda": 1.0,
+        "min_child_weight": 1.0,
+        "objective": "binary:logistic",
+        "eval_metric": "auc",
+        "tree_method": "hist",  # good CPU default
+        "random_state": 42,
+        "scale_pos_weight": pw,
+    }
+    if xgb_params:
+        params.update(xgb_params)
 
-    neg = float((y_train == 0).sum())
-    pos = float((y_train == 1).sum())
-    scale_pos_weight = neg / max(pos, 1.0)
+    cv_report: Optional[Dict[str, Any]] = None
+    if cfg.kfold_cv:
+        from sklearn.metrics import roc_auc_score
 
-    default_params = dict(
-        n_estimators=500,
-        learning_rate=0.05,
-        max_depth=6,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        reg_lambda=1.0,
-        objective="binary:logistic",
-        eval_metric="auc",
-        tree_method="hist",
-        n_jobs=-1,
-        scale_pos_weight=scale_pos_weight
+        skf = StratifiedKFold(n_splits=cfg.n_splits, shuffle=True, random_state=cfg.random_state)
+        aucs = []
+        for fold, (tr_idx, va_idx) in enumerate(skf.split(X_train, y_train), start=1):
+            X_tr, y_tr = X_train[tr_idx], y_train[tr_idx]
+            X_va, y_va = X_train[va_idx], y_train[va_idx]
+
+            clf = xgb.XGBClassifier(**params)
+            clf.fit(X_tr, y_tr)
+            va_probs = clf.predict_proba(X_va)[:, 1]
+            auc = roc_auc_score(y_va, va_probs) if len(np.unique(y_va)) > 1 else float("nan")
+            aucs.append(float(auc))
+
+        cv_report = {
+            "n_splits": cfg.n_splits,
+            "random_state": cfg.random_state,
+            "fold_auc": aucs,
+            "mean_auc": float(np.nanmean(aucs)),
+            "std_auc": float(np.nanstd(aucs)),
+        }
+
+    # Fit final model
+    clf = xgb.XGBClassifier(**params)
+    clf.fit(X_train, y_train)
+
+    dev_probs = clf.predict_proba(X_dev)[:, 1]
+    best_thr, _ = tune_threshold(y_dev.astype(int), dev_probs, metric=cfg.threshold_metric)
+
+    _ensure_dir(save_path)
+    import joblib
+
+    joblib.dump(
+        {
+            "model": clf,
+            "best_threshold": float(best_thr),
+            "pos_weight": float(pw),
+            "params": params,
+            "cv_report": cv_report,
+        },
+        save_path,
     )
-    default_params.update(params)
+    print(f"Saved: {save_path}")
 
-    model = xgb.XGBClassifier(**default_params)
-    model.fit(X_train, y_train)
+    if cfg.kfold_cv:
+        sidecar = os.path.splitext(save_path)[0] + "_cv.json"
+        with open(sidecar, "w", encoding="utf-8") as f:
+            json.dump(cv_report, f, indent=2)
+        print(f"Saved CV report: {sidecar}")
 
-    p_train = model.predict_proba(X_train)[:, 1]
-    p_dev = model.predict_proba(X_dev)[:, 1]
-    p_test = model.predict_proba(X_test)[:, 1]
-
-    thr, _ = tune_threshold(y_dev, p_dev, metric=cfg.threshold_metric)
-
-    m_train = compute_metrics(y_train, p_train, thr)
-    m_dev = compute_metrics(y_dev, p_dev, thr)
-    m_test = compute_metrics(y_test, p_test, thr)
-
-    out.update({
-        "best_threshold": float(thr),
-        "train_auc": m_train["auc"], "train_acc": m_train["acc"], "train_f1": m_train["f1"],
-        "dev_auc": m_dev["auc"], "dev_acc": m_dev["acc"], "dev_f1": m_dev["f1"],
-        "test_auc": m_test["auc"], "test_acc": m_test["acc"], "test_f1": m_test["f1"],
-        "scale_pos_weight": float(scale_pos_weight)
-    })
-
-    os.makedirs(cfg.save_dir, exist_ok=True)
-    model.save_model(os.path.join(cfg.save_dir, f"{run_name}.json"))
-    with open(os.path.join(cfg.save_dir, f"{run_name}_meta.json"), "w") as f:
-        json.dump(out, f, indent=2)
-
-    return out
+    return {"model_path": save_path, "best_threshold": float(best_thr), "pos_weight": float(pw)}
