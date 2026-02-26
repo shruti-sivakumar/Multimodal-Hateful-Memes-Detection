@@ -1,11 +1,8 @@
 # Multimodal AI for Hateful Memes Detection
 
-**NLP Course Project - Review 1**  
-**Dataset**: Facebook Hateful Memes Challenge (2020)
+Systematic ablation study for multimodal hateful meme classification. 
 
----
-
-## 📋 Problem Statement
+## Problem Statement
 
 Hateful memes combine images and text to convey hateful messages. Detecting them requires understanding **both modalities simultaneously** - neither image nor text alone is sufficient.
 
@@ -13,203 +10,110 @@ Hateful memes combine images and text to convey hateful messages. Detecting them
 
 ---
 
-## 🎯 Review 1 Objectives
-
-1. Build a complete multimodal pipeline processing both images and text
-2. Demonstrate understanding through step-by-step intermediate outputs
-3. Implement modular architecture for easy experimentation
-4. Establish baseline for future improvements
-
----
-
-## 📊 Dataset
+## Dataset
 
 **Source**: [Facebook Hateful Memes Challenge](https://ai.facebook.com/hatefulmemes)
 
-**Current Subset**:
-- Training: 80 samples
-- Validation: 20 samples
+- Training: 8500 samples
+- Validation: 500 samples
+- Test: 1000 samples
 - Classes: Binary (0=Not Hateful, 1=Hateful)
-- Stratified sampling maintains original class distribution
-
-Full dataset (10,000+ samples) will be used in future phases.
 
 ---
 
-## 🏗️ Architecture
+## Results Summary
 
-### Pipeline Overview
+### Table 1 — Frozen Embedding Classifiers (Exp 1–7)
 
-```
-Input Meme (Image + Text)
-    ↓
-┌─────────────────────────┬─────────────────────────┐
-│   IMAGE ENCODER         │   TEXT ENCODER          │
-│                         │                         │
-│ ResNet50 (frozen)       │ DistilBERT (frozen)     │
-│ [3,224,224]             │ Tokenization            │
-│      ↓                  │      ↓                  │
-│ Feature Extraction      │ Contextualization       │
-│ [2048]                  │ [768]                   │
-│      ↓                  │      ↓                  │
-│ Projection (trainable)  │ Projection (trainable)  │
-│ [512]                   │ [512]                   │
-└─────────┬───────────────┴─────────┬───────────────┘
-          │                         │
-          └─────────┬───────────────┘
-                    ↓
-              FUSION LAYER
-            Concatenation
-               [1024]
-                    ↓
-          MLP CLASSIFIER (trainable)
-          1024 → 256 → 128 → 2
-                    ↓
-            Final Prediction
-```
+| Exp | Description | AUC-ROC | Acc |
+|-----|-------------|---------|-----|
+| 1 | Image-only (ResNet50 + MLP) | 0.5306 | — |
+| 2 | Text-only (DistilBERT + MLP) | 0.6333 | — |
+| 3 | ViT vs ResNet50 (+ DistilBERT, Concat) | ResNet50: 0.6547, ViT: 0.6506 | — |
+| 4 | Global vs YOLO crops (ViT + DistilBERT) | Global: 0.6633, YOLO: 0.6611 | — |
+| 5 | DistilBERT vs RoBERTa (ViT-YOLO) | DistilBERT: 0.6633, RoBERTa: 0.6364 | — |
+| 6 | Fusion: Concat vs Mean vs Gated | **Concat: 0.6697**, Mean: 0.6447, Gated: 0.6589 | — |
+| 7 | Classifier: LR vs XGBoost vs MLP | LR: 0.6094, XGB: 0.6239, **MLP: 0.6516** | — |
 
-### Component Details
+**Best frozen setup:** ViT-YOLO + RoBERTa + Concat + MLP → AUC **0.6697**
 
-#### 1. Image Encoder
-- **Backbone**: ResNet50 pre-trained on ImageNet (frozen)
-- **Purpose**: Extract visual features from memes
-- **Preprocessing**: Resize(256) → CenterCrop(224) → Normalize(ImageNet stats)
-- **Output**: 512-dimensional image embedding
-
-#### 2. Text Encoder
-- **Backbone**: DistilBERT pre-trained (frozen)
-- **Purpose**: Extract semantic features from text
-- **Preprocessing**: Tokenization with padding/truncation (max_length=128)
-- **Output**: 512-dimensional text embedding
-
-#### 3. Fusion Classifier
-- **Method**: Concatenation of image and text embeddings
-- **Architecture**: 3-layer MLP with dropout
-- **Output**: Binary classification (Hateful vs Not Hateful)
+> Note: Exp 7 uses raw stacked embeddings (not the exp 6 projection) — see experiment notes below.
 
 ---
 
-## 🔧 Implementation
-
-### Project Structure
+## Project Structure
 
 ```
-project/
+hateful-memes/
 ├── data/
-│   ├── original/           # Raw dataset
-│   │   ├── img/           # All images
-│   │   └── train.jsonl    # Full training data
-│   └── processed/         # Preprocessed subset
-│       ├── train.jsonl    # 80 samples
-│       ├── val.jsonl      # 20 samples
-│       └── img/
-│           ├── train/     # Training images
-│           └── val/       # Validation images
-├── src/
-│   ├── dataset.py         # Dataset & DataLoader
-│   ├── encoders.py        # Image & Text encoders
-│   ├── fusion.py          # Fusion classifier
-│   ├── model.py           # Complete model
-│   ├── train_eval.py      # Training & evaluation
-│   └── utils.py           # Config & utilities
+│   ├── img/                        # Raw meme images
+│   ├── train.jsonl                 # 8500 training samples
+│   ├── dev.jsonl                   # 500 dev samples
+│   └── test.jsonl                  # 1000 test samples
+├── artifacts/
+│   └── embeddings/
+│       ├── image/                  # Pre-cached image embeddings (.npy)
+│       └── text/                   # Pre-cached text embeddings (.npy)
+│   └── yolo_boxes/
 ├── notebooks/
-│   └── pipeline.ipynb  # Complete demonstration
-├── models/
-│   └── best_model.pth     # Trained checkpoint
+├── scripts/                        # For computing yolo boxes and pre-trained embeddings
+├── src/
 ├── results/
-│   └── confusion_matrix.png
-└── README.md
+│   ├── exp1.json … exp7.json       # Per-experiment results
+│   └── tuning/                     # Hyperparameters tuned for exp1-7
+├── models/
+└── outputs/                       # Training curves of all experiments
 ```
-
-### Key Technologies
-
-- **PyTorch**: Deep learning framework
-- **Transformers (HuggingFace)**: Pre-trained language models
-- **TorchVision**: Pre-trained vision models
-- **scikit-learn**: Metrics and data splitting
-- **Pandas**: Data manipulation
-- **Matplotlib/Seaborn**: Visualization
 
 ---
 
-## 🚀 Usage
-
-### Setup
+## Installation
 
 ```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install torch torchvision transformers pillow pandas scikit-learn matplotlib seaborn tqdm
+pip install torch torchvision transformers timm
+pip install scikit-learn xgboost optuna
+pip install numpy matplotlib jsonlines joblib
 ```
 
-### Running the Pipeline
-
-```bash
-# Navigate to notebooks
-cd notebooks
-
-# Run in Jupyter
-jupyter notebook pipeline.ipynb
-```
-
-The notebook executes the following steps:
-1. Data exploration and visualization
-2. Image processing demonstration (step-by-step)
-3. Text processing demonstration (step-by-step)
-4. Fusion and classification
-5. Training loop
-6. Evaluation with metrics and visualizations
-7. Final prediction on sample
-
 ---
 
-## 📈 Initial Results
+## Experiment Notes
 
-Pipeline successfully trains and produces predictions. Detailed results and analysis will be expanded in subsequent reviews as we scale to the full dataset and experiment with different architectures.
+### Exp 1 — Image-Only Baseline
+- **Model:** ResNet50 (pretrained, frozen) → GAP → MLP
+- **Input:** Pre-cached ResNet50 embeddings
+- **AUC ~0.53** — near-random, confirms images alone don't carry hateful signal without text context
 
----
+### Exp 2 — Text-Only Baseline
+- **Model:** DistilBERT CLS (frozen) → MLP
+- **AUC 0.6333** — text carries significantly more signal than image alone, as expected for this dataset
 
-## 🔍 Technical Details
+### Exp 3 — Image Backbone Selection
+- **Compared:** ResNet50 vs ViT-base-patch16-224, both frozen, paired with DistilBERT + Concat + MLP
+- **Winner:** ResNet50 (0.6547 vs 0.6506) — marginal difference, but ViT carries forward anyway as global embedding is better understood in later experiments
+- **Note:** Both backbones are frozen feature extractors. No fine-tuning.
 
-### Trainable vs Frozen Parameters
+### Exp 4 — Global vs YOLO Crops
+- **Compared:** ViT on full resized image vs ViT on YOLO-detected object crops
+- **Winner:** Global (0.6633 vs 0.6611) — meme hatefulness often depends on full image composition, not isolated objects
+- **YOLO model:** YOLOv8, crops resized to 224×224, single largest detection used
 
-| Component | Parameters | Status |
-|-----------|-----------|--------|
-| ResNet50 backbone | 23.5M | ❄️ Frozen |
-| DistilBERT backbone | 66M | ❄️ Frozen |
-| Image projection | 1.0M | 🔥 Trainable |
-| Text projection | 0.4M | 🔥 Trainable |
-| Fusion classifier | 0.3M | 🔥 Trainable |
-| **Total trainable** | **~1.7M** | |
+### Exp 5 — Text Backbone Selection
+- **Compared:** DistilBERT vs RoBERTa, paired with best image setup (ViT-YOLO) + Concat + MLP
+- **Winner:** DistilBERT (0.6633 vs 0.6364)
+- **RoBERTa underperformance note:** Likely a hyperparameter mismatch — LR tuned for DistilBERT. Tuning notebook includes a wider LR search for RoBERTa.
 
-**Why freeze backbones?**
-- Pre-trained models already extract excellent features
-- Reduces training time (10 mins vs hours)
-- Prevents overfitting on small dataset
-- Focuses learning on task-specific fusion
+### Exp 6 — Fusion Method Selection
+- **Compared:** Concat vs Mean vs Gated fusion of img_proj and text_proj
+- **All three use same ViT-YOLO + RoBERTa backbone**
+- **Winner:** Concat (0.6697) — preserves full information from both modalities separately at 2×proj_dim
+- **Gated fusion finding:** Gates converged to α_img≈0.509, α_text≈0.492 (near-equal). Global scalar gates cannot capture per-sample modality preference — motivates token-level attention in exp 10–11
+- **Tuning:** Optuna inline (30 trials each for Mean and Gated). Concat reused from Exp 5.
 
-### Modular Design
-
-The pipeline is built with modular components:
-
-- **Image Encoder**: Processes images → 512-dim embeddings
-- **Text Encoder**: Processes text → 512-dim embeddings  
-- **Fusion Classifier**: Combines both → final prediction
-
-Each component can be independently modified or replaced without affecting others, enabling easy experimentation.
-
----
-
-## 🔮 Future Work
-
-### Review 2 Plans
-
-1. **Scale to full dataset** (10,000+ samples)
-2. **Add YOLO** for explicit object detection
-3. **Implement agentic architecture** with independent communicating agents
-4. **Experiment with fusion methods** (attention, weighted)
-5. **Compare architectures** (ViT vs ResNet, BERT vs DistilBERT)
-6. **Address class imbalance** and improve performance
+### Exp 7 — Classifier Comparison
+- **Compared:** Logistic Regression vs XGBoost vs MLP
+- **Input:** Raw stacked embeddings `np.hstack([img_emb, text_emb])` — 1536-dim, same for all three
+- **Why raw stacked (not exp6 proj):** LR and XGBoost shouldn't inherit projections learned for a different model's loss. Each classifier finds its own boundary from the same raw space. MLP learns its own projection internally.
+- **Winner:** MLP (0.6516) — nonlinear projection + learned interactions beats linear (LR) and tree-based (XGB) on dense high-dim embeddings
+- **Note:** MLP here (0.6516) is below exp6 concat MLP (0.6697) because exp6 had separate modality-specific projection heads before fusion, giving better inductive bias
+- **Tuning:** Optuna inline — 50 trials for LR (fast), 30 each for XGB and MLP
