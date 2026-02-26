@@ -1,0 +1,14 @@
+{
+  "experiment": "exp6_gated",
+  "best_dev_auc": 0.6711,
+  "params": {
+    "proj_dim": 128,
+    "hidden1": 128,
+    "hidden2": 32,
+    "dropout_proj": 0.16732884065648843,
+    "dropout1": 0.316574752189283,
+    "dropout2": 0.23778559635909707,
+    "lr": 0.0003111017022103551,
+    "weight_decay": 0.00019551655939712957
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "experiment": "exp7_lr",
+  "best_dev_auc": 0.6094,
+  "params": {
+    "C": 0.11572628051054855,
+    "penalty": "l1"
+  }
+}

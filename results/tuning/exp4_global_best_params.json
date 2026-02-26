@@ -1,0 +1,14 @@
+{
+  "experiment": "exp4_global",
+  "best_dev_auc": 0.6739,
+  "params": {
+    "proj_dim": 128,
+    "hidden1": 256,
+    "hidden2": 32,
+    "dropout_proj": 0.16246081210169555,
+    "dropout1": 0.24417840790003886,
+    "dropout2": 0.3269194065331371,
+    "lr": 0.0004860384085106945,
+    "weight_decay": 0.005134837517177728
+  }
+}

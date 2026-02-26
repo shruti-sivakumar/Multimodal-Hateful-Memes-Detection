@@ -1,0 +1,14 @@
+{
+  "experiment": "exp3_resnet50",
+  "best_dev_auc": 0.6765,
+  "params": {
+    "proj_dim": 512,
+    "hidden1": 256,
+    "hidden2": 16,
+    "dropout_proj": 0.12930163420191518,
+    "dropout1": 0.4052699079536471,
+    "dropout2": 0.23204574812188042,
+    "lr": 0.000161190447276092,
+    "weight_decay": 0.0003058656666978527
+  }
+}

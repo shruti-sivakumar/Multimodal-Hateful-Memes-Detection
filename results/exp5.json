@@ -1,0 +1,19 @@
+{
+  "experiment": "05_TextBackboneSelection",
+  "image_backbone": "vit_yolo",
+  "img_dim": 768,
+  "pipeline": "img_proj + text_proj -> concat -> MLP",
+  "results": {
+    "distilbert": {
+      "dev_auc_roc": 0.6636,
+      "dev_accuracy": 0.626,
+      "note": "reused from exp4"
+    },
+    "roberta": {
+      "dev_auc_roc": 0.6697,
+      "dev_accuracy": 0.594
+    }
+  },
+  "best_text_backbone": "roberta",
+  "best_text_dim": 768
+}

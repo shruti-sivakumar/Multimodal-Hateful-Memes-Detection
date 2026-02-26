@@ -1,0 +1,15 @@
+{
+  "experiment": "02_TextOnly_DistilBERT_MLP",
+  "dev_auc_roc": 0.6354,
+  "dev_accuracy": 0.584,
+  "model": "DistilBERT CLS (768) + MLP(128,64)",
+  "modality": "text-only",
+  "params": {
+    "hidden1": 128,
+    "hidden2": 64,
+    "dropout1": 0.49895798560352256,
+    "dropout2": 0.1952262723429521,
+    "lr": 0.004906509649994044,
+    "weight_decay": 0.0012464402007299144
+  }
+}

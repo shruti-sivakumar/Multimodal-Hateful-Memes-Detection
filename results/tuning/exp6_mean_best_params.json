@@ -1,0 +1,14 @@
+{
+  "experiment": "exp6_mean",
+  "best_dev_auc": 0.6719,
+  "params": {
+    "proj_dim": 256,
+    "hidden1": 256,
+    "hidden2": 16,
+    "dropout_proj": 0.17529637013820235,
+    "dropout1": 0.3865907658587497,
+    "dropout2": 0.17574592617082166,
+    "lr": 0.00045851408162790624,
+    "weight_decay": 0.0009079116747274279
+  }
+}

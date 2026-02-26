@@ -1,0 +1,18 @@
+{
+  "experiment": "04_GlobalVsYOLO",
+  "backbone": "vit",
+  "img_dim": 768,
+  "text_backbone": "DistilBERT CLS (768-dim)",
+  "results": {
+    "global": {
+      "dev_auc_roc": 0.6534,
+      "dev_accuracy": 0.598
+    },
+    "yolo": {
+      "dev_auc_roc": 0.6636,
+      "dev_accuracy": 0.626
+    }
+  },
+  "best_image_representation": "yolo",
+  "best_image_key": "vit_yolo"
+}

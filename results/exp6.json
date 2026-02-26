@@ -1,0 +1,27 @@
+{
+  "experiment": "06_FusionSelection",
+  "image_backbone": "vit_yolo",
+  "img_dim": 768,
+  "text_backbone": "roberta",
+  "text_dim": 768,
+  "results": {
+    "concat": {
+      "dev_auc_roc": 0.6697,
+      "dev_accuracy": 0.594,
+      "note": "reused from exp5"
+    },
+    "mean": {
+      "dev_auc_roc": 0.6447,
+      "dev_accuracy": 0.598
+    },
+    "gated": {
+      "dev_auc_roc": 0.6589,
+      "dev_accuracy": 0.598
+    }
+  },
+  "best_fusion": "concat",
+  "gated_weights": {
+    "alpha_img": 0.5093,
+    "alpha_text": 0.4918
+  }
+}

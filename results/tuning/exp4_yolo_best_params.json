@@ -1,0 +1,14 @@
+{
+  "experiment": "exp4_yolo",
+  "best_dev_auc": 0.6728,
+  "params": {
+    "proj_dim": 512,
+    "hidden1": 128,
+    "hidden2": 64,
+    "dropout_proj": 0.29094033367128297,
+    "dropout1": 0.31405481791583323,
+    "dropout2": 0.1668553738271178,
+    "lr": 0.000580459829042945,
+    "weight_decay": 9.08064126912784e-05
+  }
+}

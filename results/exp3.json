@@ -1,0 +1,17 @@
+{
+  "experiment": "03_ImageBackboneSelection",
+  "pipeline": "img_proj + text_proj -> concat -> MLP",
+  "text_backbone": "DistilBERT CLS (768-dim)",
+  "results": {
+    "resnet50": {
+      "dev_auc_roc": 0.6482,
+      "dev_accuracy": 0.586
+    },
+    "vit": {
+      "dev_auc_roc": 0.669,
+      "dev_accuracy": 0.58
+    }
+  },
+  "best_image_backbone": "vit",
+  "best_img_dim": 768
+}

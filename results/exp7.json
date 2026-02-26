@@ -1,0 +1,23 @@
+{
+  "experiment": "07_EmbeddingClassifierComparison",
+  "image_backbone": "vit_yolo",
+  "img_dim": 768,
+  "text_backbone": "roberta",
+  "text_dim": 768,
+  "input": "raw stacked embeddings (dim=1536)",
+  "results": {
+    "lr": {
+      "dev_auc_roc": 0.6094,
+      "dev_accuracy": 0.552
+    },
+    "xgb": {
+      "dev_auc_roc": 0.6239,
+      "dev_accuracy": 0.588
+    },
+    "mlp": {
+      "dev_auc_roc": 0.6516,
+      "dev_accuracy": 0.604
+    }
+  },
+  "best_classifier": "mlp"
+}

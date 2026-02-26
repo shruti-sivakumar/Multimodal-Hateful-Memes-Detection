@@ -1,0 +1,14 @@
+{
+  "experiment": "exp5_roberta",
+  "best_dev_auc": 0.677,
+  "params": {
+    "proj_dim": 512,
+    "hidden1": 128,
+    "hidden2": 64,
+    "dropout_proj": 0.34990176943796875,
+    "dropout1": 0.3844441061352564,
+    "dropout2": 0.34419811167334946,
+    "lr": 0.005634783190720708,
+    "weight_decay": 0.0001863574604726976
+  }
+}

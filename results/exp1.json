@@ -1,0 +1,15 @@
+{
+  "experiment": "01_ImageOnly_ResNet50_MLP",
+  "dev_auc_roc": 0.5667,
+  "dev_accuracy": 0.544,
+  "model": "ResNet50 global (2048) + MLP(512,64)",
+  "modality": "image-only",
+  "params": {
+    "hidden1": 512,
+    "hidden2": 64,
+    "dropout1": 0.4155152925355866,
+    "dropout2": 0.30701119091242135,
+    "lr": 0.0017164557754294728,
+    "weight_decay": 0.00469522143960661
+  }
+}

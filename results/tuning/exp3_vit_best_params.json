@@ -1,0 +1,14 @@
+{
+  "experiment": "exp3_vit",
+  "best_dev_auc": 0.6813,
+  "params": {
+    "proj_dim": 512,
+    "hidden1": 64,
+    "hidden2": 16,
+    "dropout_proj": 0.3119673709739203,
+    "dropout1": 0.3231939855156805,
+    "dropout2": 0.17305300348035824,
+    "lr": 0.0002623436007711755,
+    "weight_decay": 1.1443137160728232e-05
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "experiment": "exp7_mlp",
+  "best_dev_auc": 0.682,
+  "params": {
+    "hidden1": 512,
+    "hidden2": 64,
+    "hidden3": 32,
+    "dropout1": 0.41242177333881364,
+    "dropout2": 0.20617534828874073,
+    "dropout3": 0.39097295564859835,
+    "lr": 0.002595942550311264,
+    "weight_decay": 4.335281794951564e-05
+  }
+}

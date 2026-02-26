@@ -1,0 +1,12 @@
+{
+  "experiment": "exp7_xgb",
+  "best_dev_auc": 0.6239,
+  "params": {
+    "n_estimators": 172,
+    "max_depth": 6,
+    "learning_rate": 0.11799352585860486,
+    "subsample": 0.9925964817668709,
+    "colsample_bytree": 0.9585165151166396,
+    "min_child_weight": 9
+  }
+}
