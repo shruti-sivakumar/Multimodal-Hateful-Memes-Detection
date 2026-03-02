@@ -1,0 +1,20 @@
+{
+  "experiment": "11_CNN_BiGRU_CrossAttention",
+  "pipeline": "CNN patches [196] + BiGRU hidden states [seq] -> BiDirectional CrossAttn (2 layers) -> pool -> concat -> FCNN",
+  "pretrained": false,
+  "results": {
+    "dev_auc_roc": 0.6208,
+    "dev_accuracy": 0.578
+  },
+  "architecture": {
+    "cnn": "4 conv blocks -> 196 patch tokens -> Linear(256)",
+    "bigru": "Embedding + BiGRU -> all hidden states -> Linear(256)",
+    "cross_attention": "2x BidirectionalCrossAttn(d=256, nhead=8) \u2014 img->txt and txt->img",
+    "classifier": "GAP(img) || MeanPool(txt) -> concat -> Linear(256) -> Linear(128) -> Linear(1)"
+  },
+  "comparison": {
+    "exp9_fcnn": 0.625,
+    "exp10_self_attn": 0.6443,
+    "exp11_cross_attn": 0.6208
+  }
+}

@@ -9,7 +9,6 @@ from src.dataset import HatefulMemesDataset
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
 TEXT_MODELS = {
-    "bert": "bert-base-uncased",
     "distilbert": "distilbert-base-uncased",
     "roberta": "roberta-base",
 }

@@ -10,7 +10,7 @@ from src.dataset import HatefulMemesDataset
 
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
-IMAGE_MODELS = ["resnet50", "vgg16", "vit"]
+IMAGE_MODELS = ["resnet50", "vit"]
 
 def get_model_and_transform(model_name: str):
     if model_name == "resnet50":
@@ -18,18 +18,6 @@ def get_model_and_transform(model_name: str):
         model = torch.nn.Sequential(*list(model.children())[:-1])  # [B,2048,1,1]
         transform = models.ResNet50_Weights.DEFAULT.transforms()
         out_dim = 2048
-
-    elif model_name == "vgg16":
-        base = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
-        # Keep feature extractor + avgpool, and keep classifier up to fc7 (4096)
-        model = torch.nn.Sequential(
-            base.features,
-            base.avgpool,
-            torch.nn.Flatten(),
-            *list(base.classifier.children())[:-1]  # drops final Linear(4096->1000)
-        )
-        transform = models.VGG16_Weights.DEFAULT.transforms()
-        out_dim = 4096
 
     elif model_name == "vit":
         model = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)

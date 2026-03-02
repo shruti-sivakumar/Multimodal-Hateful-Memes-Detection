@@ -1,0 +1,14 @@
+{
+  "experiment": "09_CNN_BiGRU_FCNN",
+  "pipeline": "Custom CNN (4 conv blocks) + Bi-GRU (scratch embeds) -> concat -> FCNN",
+  "pretrained": false,
+  "results": {
+    "dev_auc_roc": 0.625,
+    "dev_accuracy": 0.574
+  },
+  "architecture": {
+    "cnn": "4 conv blocks (3->32->64->128->256) + GAP + Linear(256)",
+    "bigru": "Embedding(5829, 128) + BiGRU(128, 128) + Linear(256)",
+    "fcnn": "Linear(512, 256) -> ReLU -> Linear(256, 128) -> ReLU -> Linear(1)"
+  }
+}

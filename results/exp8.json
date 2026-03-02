@@ -1,0 +1,20 @@
+{
+  "experiment": "08_FineTuned_Concat_MLP",
+  "image_backbone": "vit-base-patch16-224 (fine-tuned)",
+  "text_backbone": "roberta-base (fine-tuned)",
+  "pipeline": "ViT CLS + RoBERTa CLS -> proj -> concat -> MLP",
+  "frozen_baseline_auc": 0.6697,
+  "results": {
+    "dev_auc_roc": 0.684,
+    "dev_accuracy": 0.596,
+    "delta_vs_frozen": 0.0143
+  },
+  "training": {
+    "epochs_run": 9,
+    "batch_size": 16,
+    "grad_accum_steps": 4,
+    "effective_batch_size": 64,
+    "backbone_lr": 2e-05,
+    "clf_lr": 0.0001
+  }
+}

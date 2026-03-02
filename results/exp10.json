@@ -1,0 +1,15 @@
+{
+  "experiment": "10_CNN_BiGRU_SelfAttention",
+  "pipeline": "CNN patches [196] + BiGRU hidden states [seq] -> concat -> Self-Attention -> mean pool -> classifier",
+  "pretrained": false,
+  "results": {
+    "dev_auc_roc": 0.6443,
+    "dev_accuracy": 0.59
+  },
+  "architecture": {
+    "cnn": "4 conv blocks + flatten to 196 patch tokens + Linear(256)",
+    "bigru": "Embedding + BiGRU -> all hidden states + Linear(256)",
+    "self_attention": "TransformerEncoder(d=256, nhead=8, layers=2) over joint [196+32] tokens",
+    "classifier": "mean pool -> Linear(128) -> Linear(1)"
+  }
+}
